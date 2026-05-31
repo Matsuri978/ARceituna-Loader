@@ -181,14 +181,14 @@ def process_single_geojson_file(file_path, supabase_client=None, log_callback=No
     for parcela in result.parcelas:
         ref = parcela.get("ref_catastral", "")
         try:
-            inserted = supabase_client.insert_parcela(parcela)
-            if inserted:
-                result.parcels_inserted += 1
-                log(f"{t('log.inserted')}: {ref}")
-            else:
+            if supabase_client.parcela_exists(ref):
                 msg = f"{t('log.already_exists')}: {ref}"
                 result.insertion_errors.append(msg)
                 log(f"@@ERR@@ {t('log.error_prefix')}: {msg}")
+            else:
+                supabase_client.insert_parcela(parcela)
+                result.parcels_inserted += 1
+                log(f"{t('log.inserted')}: {ref}")
         except SupabaseError as exc:
             msg = t("log.insert_parcel_error").format(ref=ref, error=exc)
             result.insertion_errors.append(msg)
@@ -200,14 +200,14 @@ def process_single_geojson_file(file_path, supabase_client=None, log_callback=No
     for recinto in result.recintos:
         rid = recinto.get("id_recinto_sigpac", "")
         try:
-            inserted = supabase_client.insert_recinto(recinto)
-            if inserted:
-                result.enclosures_inserted += 1
-                log(f"{t('log.inserted_enc')}: {rid}")
-            else:
+            if supabase_client.recinto_exists(rid):
                 msg = f"{t('log.already_exists')}: {rid}"
                 result.insertion_errors.append(msg)
                 log(f"@@ERR@@ {t('log.error_prefix')}: {msg}")
+            else:
+                supabase_client.insert_recinto(recinto)
+                result.enclosures_inserted += 1
+                log(f"{t('log.inserted_enc')}: {rid}")
         except SupabaseError as exc:
             msg = t("log.insert_enclosure_error").format(rid=rid, error=exc)
             result.insertion_errors.append(msg)

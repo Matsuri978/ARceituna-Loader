@@ -99,9 +99,57 @@ class SupabaseClient:
         """Crea el perfil de gestor de campo para el usuario actual."""
         return self.rpc("crear_perfil_gestor_campo", {})
 
+    def _get(self, path, params=None):
+        """Realiza una peticion GET con parametros de query."""
+        url = self.url + path
+        if params:
+            import urllib.parse
+            url += "?" + urllib.parse.urlencode(params)
+        body = None
+        headers = {
+            "apikey": self.anon_key,
+            "Accept": "application/json",
+        }
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+        request = urllib.request.Request(url, data=body, headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                content = response.read().decode("utf-8")
+                if not content:
+                    return []
+                return json.loads(content)
+        except urllib.error.HTTPError as exc:
+            message = exc.read().decode("utf-8", errors="replace")
+            raise SupabaseError(_extract_error_message(message, exc.code)) from exc
+        except urllib.error.URLError as exc:
+            raise SupabaseError(f"No se pudo conectar con Supabase: {exc.reason}") from exc
+
+    def parcela_exists(self, ref_catastral):
+        """Comprueba si una parcela ya existe por su referencia catastral."""
+        try:
+            result = self._get(
+                "/rest/v1/parcelas",
+                {"ref_catastral": f"eq.{ref_catastral}", "select": "ref_catastral", "limit": "1"},
+            )
+            return len(result) > 0
+        except SupabaseError:
+            return False
+
+    def recinto_exists(self, id_recinto_sigpac):
+        """Comprueba si un recinto ya existe por su id SIGPAC."""
+        try:
+            result = self._get(
+                "/rest/v1/recintos",
+                {"id_recinto_sigpac": f"eq.{id_recinto_sigpac}", "select": "id_recinto_sigpac", "limit": "1"},
+            )
+            return len(result) > 0
+        except SupabaseError:
+            return False
+
     def insert_parcela(self, parcela):
         """Inserta una parcela en la base de datos via RPC."""
-        response = self.rpc(
+        self.rpc(
             "insertar_parcela_gestor_campo",
             {
                 "p_ref_catastral": parcela.get("ref_catastral", ""),
@@ -109,11 +157,11 @@ class SupabaseClient:
                 "p_num_parcela": parcela.get("num_parcela", ""),
             },
         )
-        return bool(response)
+        return True
 
     def insert_recinto(self, recinto):
         """Inserta un recinto en la base de datos via RPC."""
-        response = self.rpc(
+        self.rpc(
             "insertar_recinto_desde_geojson",
             {
                 "p_id_recinto_sigpac": str(recinto.get("id_recinto_sigpac", "")),
@@ -124,7 +172,7 @@ class SupabaseClient:
                 "p_geom_geojson": recinto.get("geom") or {},
             },
         )
-        return bool(response)
+        return True
 
     def rpc(self, function_name, payload):
         """Ejecuta una funcion RPC en Supabase."""
